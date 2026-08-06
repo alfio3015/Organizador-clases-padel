@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Mis clases · Pádel</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { margin: 0; -webkit-tap-highlight-color: transparent; }
+  * { -webkit-user-select: none; user-select: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, doc, getDoc, setDoc, onSnapshot, collection
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAI15I6Sdl4pIkjOnK3UHx6QAaA_Nhs2pA",
+  authDomain: "organizador-clases-de-padel.firebaseapp.com",
+  projectId: "organizador-clases-de-padel",
+  storageBucket: "organizador-clases-de-padel.firebasestorage.app",
+  messagingSenderId: "949517364408",
+  appId: "1:949517364408:web:5b6d40f02c61f8cddb184d"
+};
+
+const TELEFONO_PROFE = "5491165793553";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// Exponemos a window para que el bloque Babel (sin imports) los pueda usar
+window.__firebase = { db, doc, getDoc, setDoc, onSnapshot, collection, TELEFONO_PROFE };
+window.__firebaseReady = true;
+window.dispatchEvent(new Event("firebase-ready"));
+</script>
+
+<script type="text/babel" data-type="module">
+const { useState, useEffect, useMemo } = React;
+
+function normalizarTelefono(t) {
+  return (t || "").replace(/[^\d]/g, "");
+}
+
+function useFirebase() {
+  const [listo, setListo] = useState(!!window.__firebaseReady);
+  useEffect(() => {
+    if (listo) return;
+    const handler = () => setListo(true);
+    window.addEventListener("firebase-ready", handler);
+    return () => window.removeEventListener("firebase-ready", handler);
+  }, [listo]);
+  return listo ? window.__firebase : null;
+}
+
+function LoginTelefono({ onIngresar }) {
+  const [telefono, setTelefono] = useState("");
+  const [error, setError] = useState("");
+
+  const ingresar = () => {
+    const tel = normalizarTelefono(telefono);
+    if (tel.length < 8) {
+      setError("Ingresá un teléfono válido con código de país");
+      return;
+    }
+    onIngresar(tel);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#141D18] text-[#EEEAE0] font-sans flex items-center justify-center px-5 relative overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg, transparent, transparent 78px, #F3F0E8 78px, #F3F0E8 80px), repeating-linear-gradient(90deg, transparent, transparent 78px, #F3F0E8 78px, #F3F0E8 80px)",
+        }}
+      />
+      <div className="w-full max-w-xs relative">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-[#8FAE95] font-semibold mb-1 text-center">Clases de pádel</p>
+        <h1 className="text-2xl font-black text-center text-[#F3F0E8] mb-6">Ingresá tu teléfono</h1>
+
+        <input
+          value={telefono}
+          onChange={(e) => { setTelefono(e.target.value); setError(""); }}
+          placeholder="Ej: 5491122334455"
+          inputMode="tel"
+          className="w-full mb-2 px-4 py-3 rounded-xl bg-[#1D2921] border border-[#3A4A3F] text-base text-[#EEEAE0] placeholder:text-[#5C6660] outline-none focus:border-[#8FAE95] text-center"
+        />
+        {error && <p className="text-[#C24B4B] text-xs text-center mb-2">{error}</p>}
+        <p className="text-[10px] text-[#5C6660] text-center mb-5">Con código de país, sin espacios ni guiones.</p>
+
+        <button
+          onClick={ingresar}
+          className="w-full py-3 rounded-xl bg-[#C9E4B5] text-[#142016] text-sm font-bold hover:brightness-95 active:scale-[0.98] transition"
+        >
+          Entrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AppRaiz() {
+  const fb = useFirebase();
+  const [telefono, setTelefono] = useState(() => localStorage.getItem("padel_telefono") || null);
+
+  const ingresar = (tel) => {
+    localStorage.setItem("padel_telefono", tel);
+    setTelefono(tel);
+  };
+
+  if (!fb) {
+    return (
+      <div className="min-h-screen bg-[#141D18] flex items-center justify-center text-[#8FA090] text-sm">
+        Cargando...
+      </div>
+    );
+  }
+
+  if (!telefono) {
+    return <LoginTelefono onIngresar={ingresar} />;
+  }
+
+  const esProfe = telefono === fb.TELEFONO_PROFE;
+
+  return esProfe ? <PanelProfe fb={fb} /> : <CalendarioAlumno fb={fb} telefono={telefono} />;
+}
+
+// ---------------------------------------------------------------------------
+// Placeholder temporal — en el siguiente paso conectamos el calendario real
+// ---------------------------------------------------------------------------
+function CalendarioAlumno({ fb, telefono }) {
+  return (
+    <div className="min-h-screen bg-[#141D18] text-[#EEEAE0] flex items-center justify-center px-5 text-center">
+      <div>
+        <p className="text-sm text-[#8FA090] mb-2">Conectado como alumno</p>
+        <p className="text-xs text-[#5C6660]">Tel: {telefono}</p>
+        <p className="text-xs text-[#5C6660] mt-4">(calendario en construcción — siguiente paso)</p>
+      </div>
+    </div>
+  );
+}
+
+function PanelProfe({ fb }) {
+  return (
+    <div className="min-h-screen bg-[#141D18] text-[#EEEAE0] flex items-center justify-center px-5 text-center">
+      <div>
+        <p className="text-sm text-[#8FA090] mb-2">Conectado como profe (admin)</p>
+        <p className="text-xs text-[#5C6660] mt-4">(panel en construcción — siguiente paso)</p>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<AppRaiz />);
+</script>
+</body>
+</html>
